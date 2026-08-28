@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -14,13 +15,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LanguageSwitch } from '@/components/language-switch';
 import { Palette, Radius } from '@/constants/design';
 import { Fonts } from '@/constants/theme';
-import { ApiError, signIn } from '@/lib/api';
+import { API_BASE_URL, ApiError, signIn } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n';
+
+/** Кому писать за доступом. Пока учётки заводит один человек — адрес здесь. */
+const ADMIN_EMAIL = 'vsavinkov60@gmail.com';
 
 type Field = 'identifier' | 'password';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
+
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [focused, setFocused] = useState<Field | null>(null);
@@ -30,6 +38,24 @@ export default function LoginScreen() {
   const passwordRef = useRef<TextInput>(null);
   const filled = identifier.trim().length > 0 && password.length > 0;
   const canSubmit = filled && !submitting;
+
+  function describe(cause: unknown): string {
+    if (!(cause instanceof ApiError)) {
+      return t('errorUnknown');
+    }
+
+    switch (cause.code) {
+      case 'notConfigured':
+        return t('errorNotConfigured');
+      case 'invalidCredentials':
+        return t('errorInvalidCredentials');
+      case 'unreachable':
+        // Адрес в тексте — чтобы не гадать, куда приложение стучалось.
+        return t('errorUnreachable', { url: API_BASE_URL ?? '' });
+      case 'serverError':
+        return t('errorServer', { status: cause.detail ?? '' });
+    }
+  }
 
   async function handleSubmit() {
     if (!canSubmit) {
@@ -42,19 +68,36 @@ export default function LoginScreen() {
     try {
       await signIn(identifier.trim(), password);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Не удалось войти');
+      setError(describe(cause));
       setSubmitting(false);
       return;
     }
 
     // Экран сразу уходит из стека: возврат кнопкой «назад» на форму входа
     // после успешного входа выглядел бы как выход из аккаунта.
-    router.replace('/(tabs)');
+    router.replace('/marketplaces');
+  }
+
+  async function handleWriteToAdmin() {
+    const url = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(t('mailSubject'))}`;
+
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // На устройстве может не быть почтового приложения. Показываем адрес,
+      // иначе человек упирается в молчащую кнопку и не знает, куда писать.
+      setError(t('mailFailed', { email: ADMIN_EMAIL }));
+    }
   }
 
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="dark" />
+
+      <View style={styles.topBar}>
+        <LanguageSwitch />
+      </View>
+
       <KeyboardAvoidingView
         style={styles.fill}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -66,11 +109,11 @@ export default function LoginScreen() {
             <Text style={styles.markText}>ШМ</Text>
           </View>
 
-          <Text style={styles.title}>Вход в дашборд</Text>
-          <Text style={styles.subtitle}>Доступ по корпоративной учётной записи</Text>
+          <Text style={styles.title}>{t('title')}</Text>
+          <Text style={styles.subtitle}>{t('subtitle')}</Text>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Логин или почта</Text>
+            <Text style={styles.label}>{t('identifierLabel')}</Text>
             <TextInput
               style={[styles.input, focused === 'identifier' && styles.inputFocused]}
               value={identifier}
@@ -92,7 +135,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Пароль</Text>
+            <Text style={styles.label}>{t('passwordLabel')}</Text>
             <TextInput
               ref={passwordRef}
               style={[styles.input, focused === 'password' && styles.inputFocused]}
@@ -124,7 +167,7 @@ export default function LoginScreen() {
             {submitting ? (
               <ActivityIndicator color={Palette.paper} />
             ) : (
-              <Text style={styles.submitText}>Войти</Text>
+              <Text style={styles.submitText}>{t('submit')}</Text>
             )}
           </Pressable>
 
@@ -132,7 +175,12 @@ export default function LoginScreen() {
               кнопку из-под пальца в момент нажатия. */}
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Text style={styles.helper}>Забыли пароль? Напишите администратору</Text>
+          <Pressable
+            onPress={handleWriteToAdmin}
+            hitSlop={12}
+            style={({ pressed }) => [styles.helperButton, pressed && styles.helperPressed]}>
+            <Text style={styles.helper}>{t('helper')}</Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -154,6 +202,11 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  topBar: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    alignItems: 'flex-end',
+  },
   mark: {
     width: 46,
     height: 46,
@@ -241,10 +294,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
+  helperButton: {
+    marginTop: 16,
+  },
+  helperPressed: {
+    opacity: 0.6,
+  },
   helper: {
     fontSize: 12.5,
     color: Palette.muted,
     textAlign: 'center',
-    marginTop: 16,
   },
 });

@@ -1,22 +1,31 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const API_PORT = 8000;
 const TIMEOUT_MS = 10_000;
 
-function resolveBaseUrl(): string {
+function resolveBaseUrl(): string | null {
   const configured = process.env.EXPO_PUBLIC_API_URL;
   if (configured) {
     return configured.replace(/\/+$/, '');
   }
 
-  // С телефона localhost — это сам телефон, а не компьютер, где крутится API.
-  // Metro отдал бандл со своего адреса в локальной сети; API слушает там же.
+  // В разработке адрес берём у Metro: с телефона localhost — это сам телефон,
+  // а не компьютер, где крутится API.
   const host = Constants.expoConfig?.hostUri?.split(':')[0];
   if (host) {
     return `http://${host}:${API_PORT}`;
   }
 
-  return `http://localhost:${API_PORT}`;
+  // На вебе hostUri пустой, но localhost там — та же машина, что открыла
+  // страницу, так что откат осмыслен.
+  if (Platform.OS === 'web') {
+    return `http://localhost:${API_PORT}`;
+  }
+
+  // На телефоне localhost — сам телефон. Молчаливый откат туда выглядел бы
+  // как «сервер недоступен», и причину искали бы в сети, а не в сборке.
+  return null;
 }
 
 export const API_BASE_URL = resolveBaseUrl();
@@ -27,10 +36,30 @@ export type User = {
   email: string;
 };
 
-/** Ошибка с текстом, который можно показать пользователю как есть. */
-export class ApiError extends Error {}
+export type ApiErrorCode =
+  | 'notConfigured'
+  | 'unreachable'
+  | 'invalidCredentials'
+  | 'serverError';
+
+/**
+ * Несёт код, а не готовую фразу: текст ошибки собирается на экране, где
+ * известен выбранный язык. Иначе сообщения остались бы русскими навсегда.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly code: ApiErrorCode,
+    readonly detail?: string,
+  ) {
+    super(code);
+  }
+}
 
 export async function signIn(identifier: string, password: string): Promise<User> {
+  if (API_BASE_URL === null) {
+    throw new ApiError('notConfigured');
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -44,18 +73,17 @@ export async function signIn(identifier: string, password: string): Promise<User
     });
   } catch {
     // Сюда попадают и обрыв сети, и таймаут, и «сервер не запущен».
-    // Адрес в тексте — чтобы не гадать, куда именно приложение стучалось.
-    throw new ApiError(`Сервер недоступен: ${API_BASE_URL}`);
+    throw new ApiError('unreachable');
   } finally {
     clearTimeout(timer);
   }
 
   if (response.status === 401) {
-    throw new ApiError('Неверный логин или пароль');
+    throw new ApiError('invalidCredentials');
   }
 
   if (!response.ok) {
-    throw new ApiError(`Сервер ответил ошибкой (${response.status})`);
+    throw new ApiError('serverError', String(response.status));
   }
 
   return (await response.json()) as User;

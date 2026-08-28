@@ -1,0 +1,153 @@
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import type { ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { LanguageSwitch } from '@/components/language-switch';
+import { Brand, Palette, Radius } from '@/constants/design';
+import { Fonts } from '@/constants/theme';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
+import { marketplaceHref, type MarketplaceId, type MarketplaceTab } from '@/lib/marketplaces';
+
+export type TabKey = 'dashboard' | 'article' | 'history' | 'more';
+
+type Tab = {
+  key: TabKey;
+  glyph: string;
+  label: TranslationKey;
+  /** Раздел в адресе. У дашборда его нет — он корневой экран маркетплейса. */
+  tab?: MarketplaceTab;
+};
+
+const TABS: readonly Tab[] = [
+  { key: 'dashboard', glyph: '◧', label: 'tabDashboard' },
+  { key: 'article', glyph: '⌕', label: 'tabArticle', tab: 'article' },
+  { key: 'history', glyph: '◔', label: 'tabHistory', tab: 'history' },
+  { key: 'more', glyph: '≡', label: 'tabMore', tab: 'more' },
+];
+
+type Props = {
+  id: MarketplaceId;
+  active: TabKey;
+  children: ReactNode;
+};
+
+/**
+ * Общая обвязка экранов маркетплейса: шапка с возвратом и языком, тело,
+ * нижние вкладки в цвет маркетплейса.
+ *
+ * Вкладки переключаются через replace, а не push: иначе хождение между
+ * ними накапливало бы в стеке десяток экранов, и «назад» пришлось бы
+ * нажимать столько же раз.
+ */
+export function MarketplaceShell({ id, active, children }: Props) {
+  const { t } = useTranslation();
+  const accent = Brand[id].accent;
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <StatusBar style="dark" />
+
+      <View style={styles.topBar}>
+        <Pressable
+          // Экран может быть открыт по прямой ссылке — тогда возвращаться
+          // некуда, и уходим к выбору маркетплейса.
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/marketplaces'))}
+          hitSlop={8}
+          style={({ pressed }) => [styles.back, pressed && styles.backPressed]}>
+          <Text style={styles.backChevron}>‹</Text>
+          <Text style={styles.backText}>{t('back')}</Text>
+        </Pressable>
+
+        <LanguageSwitch />
+      </View>
+
+      <View style={styles.body}>{children}</View>
+
+      <View style={styles.tabs}>
+        {TABS.map((tab) => {
+          const current = tab.key === active;
+          const color = current ? accent : Palette.dim;
+          return (
+            <Pressable
+              key={tab.key}
+              disabled={current}
+              onPress={() => router.replace(marketplaceHref(id, tab.tab))}
+              style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}>
+              <Text style={[styles.tabGlyph, { color }]}>{tab.glyph}</Text>
+              <Text style={[styles.tabLabel, { color }]}>{t(tab.label)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: Palette.appBg,
+  },
+  body: {
+    flex: 1,
+  },
+
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 8,
+  },
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: Palette.field,
+    borderRadius: Radius.control,
+  },
+  backPressed: {
+    opacity: 0.7,
+  },
+  backChevron: {
+    fontSize: 15,
+    lineHeight: 17,
+    color: Palette.muted,
+  },
+  backText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Palette.muted,
+  },
+
+  tabs: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: Palette.line,
+    backgroundColor: Palette.paper,
+    paddingTop: 9,
+    paddingBottom: 15,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  tabPressed: {
+    opacity: 0.6,
+  },
+  tabGlyph: {
+    fontFamily: Fonts.mono,
+    fontSize: 19.5,
+    lineHeight: 24,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  tabLabel: {
+    fontSize: 9.5,
+    fontWeight: '500',
+  },
+});
