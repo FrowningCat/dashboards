@@ -36,9 +36,13 @@ const PERIOD_LABELS: Record<Period, TranslationKey> = {
 };
 
 type Sales = {
+  clicks: number;
+  orders: number;
+  /** Выкуплено: заказ и выкуп у маркетплейса не одно и то же. */
   pairs: number;
   /** Рублями, числом: от него считается доля выбранного размера. */
   revenue: number;
+  returns: number;
   sizes: readonly SizeStock[];
 };
 
@@ -95,8 +99,24 @@ function warehouse(
   return { name, quantity, sizes: spread(quantity, shape), inWayToClient, inWayFromClient };
 }
 
+const REDEMPTION_RATE = 0.85;
+const CLICK_TO_ORDER_RATE = 0.098;
+const RETURN_RATE = 0.068;
+
 function sales(pairs: number, revenue: number, shape: readonly SizeStock[]): Sales {
-  return { pairs, revenue, sizes: spread(pairs, shape) };
+  const orders = Math.round(pairs / REDEMPTION_RATE);
+
+  return {
+    // Заглушка: клики и заказы выводим из выкупов по типовым долям, чтобы
+    // воронка сходилась — заказов не может быть больше, чем нажатий.
+    // В настоящей версии это отдельные поля из рекламного API и метода заказов.
+    clicks: Math.round(orders / CLICK_TO_ORDER_RATE),
+    orders,
+    pairs,
+    revenue,
+    returns: Math.round(pairs * RETURN_RATE),
+    sizes: spread(pairs, shape),
+  };
 }
 
 /** Доля выбранного размера в числе, посчитанном по всем размерам. */
@@ -767,14 +787,19 @@ function SalesCard({
   const [showSizes, setShowSizes] = useState(false);
 
   const figures = article.sales[period];
-  const sized = sizeIn(figures.sizes, size);
-  const pairs = sized ?? figures.pairs;
-  const revenue = sized === null ? figures.revenue : share(figures.revenue, sized, figures.pairs);
+  const sized = sizeIn(article.sizes, size);
+  const stock = totalStock(article);
+
+  /**
+   * Доля выбранного размера. Клики через неё не проходят: они считаются
+   * по карточке целиком, у неё нет разбивки по размерам.
+   */
+  const part = (value: number) => (sized === null ? value : share(value, sized, stock));
 
   return (
     <View style={styles.card}>
       <View style={[styles.headRow, styles.labelSpaced]}>
-        <Text style={styles.label}>{t('sold')}</Text>
+        <Text style={styles.label}>{t('periodMetrics')}</Text>
         {size ? <Text style={styles.label}>· {size}</Text> : null}
       </View>
 
@@ -794,16 +819,25 @@ function SalesCard({
         })}
       </View>
 
+      {/* Порядок — воронка: нажали, заказали, выкупили, вернули. */}
+      <View style={styles.line}>
+        <Text style={styles.lineName}>{t('metricClicks')}</Text>
+        {size ? <Text style={styles.lineNote}>{t('perCard')}</Text> : null}
+        <Text style={styles.lineValue}>{grouped(figures.clicks)}</Text>
+      </View>
+
+      <View style={styles.line}>
+        <Text style={styles.lineName}>{t('metricOrders')}</Text>
+        <Text style={styles.lineValue}>{grouped(part(figures.orders))}</Text>
+        <Text style={styles.lineUnit}>{t('totalPairs')}</Text>
+      </View>
+
       <Pressable
         onPress={() => setShowSizes(!showSizes)}
-        style={({ pressed }) => [styles.soldRow, pressed && styles.linePressed]}>
-        <View>
-          <View style={styles.valueRow}>
-            <Text style={styles.statValue}>{grouped(pairs)}</Text>
-            <Text style={styles.statUnit}>{t('totalPairs')}</Text>
-          </View>
-          <Text style={styles.statCaption}>{money(revenue)}</Text>
-        </View>
+        style={({ pressed }) => [styles.line, pressed && styles.linePressed]}>
+        <Text style={styles.lineName}>{t('soldUnits')}</Text>
+        <Text style={styles.lineValue}>{grouped(part(figures.pairs))}</Text>
+        <Text style={styles.lineUnit}>{t('totalPairs')}</Text>
         <Text style={styles.lineChevron}>{showSizes ? '⌄' : '›'}</Text>
       </Pressable>
 
@@ -818,6 +852,17 @@ function SalesCard({
           />
         </View>
       ) : null}
+
+      <View style={styles.line}>
+        <Text style={styles.lineName}>{t('soldMoney')}</Text>
+        <Text style={styles.lineValue}>{money(part(figures.revenue))}</Text>
+      </View>
+
+      <View style={styles.line}>
+        <Text style={styles.lineName}>{t('metricReturns')}</Text>
+        <Text style={styles.lineValue}>{grouped(part(figures.returns))}</Text>
+        <Text style={styles.lineUnit}>{t('totalPairs')}</Text>
+      </View>
     </View>
   );
 }
@@ -1335,6 +1380,14 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '600',
     color: Palette.ink,
+  },
+  lineUnit: {
+    fontSize: 11,
+    color: Palette.muted,
+  },
+  lineNote: {
+    fontSize: 10.5,
+    color: Palette.dim,
   },
   lineValueMuted: {
     fontFamily: Fonts.mono,
