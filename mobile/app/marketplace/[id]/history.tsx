@@ -1,48 +1,773 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MarketplaceShell } from '@/components/marketplace-shell';
-import { Palette } from '@/constants/design';
-import { useTranslation } from '@/lib/i18n';
-import { isMarketplaceId } from '@/lib/marketplaces';
+import { Brand, Palette, Radius } from '@/constants/design';
+import { Fonts } from '@/constants/theme';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
+import { isMarketplaceId, type MarketplaceId } from '@/lib/marketplaces';
+
+const PERIODS = ['day', 'week', 'month', 'quarter'] as const;
+
+type Period = (typeof PERIODS)[number];
+
+const PERIOD_LABELS: Record<Period, TranslationKey> = {
+  day: 'periodDay',
+  week: 'periodWeek',
+  month: 'periodMonth',
+  quarter: 'periodQuarter',
+};
+
+/**
+ * Сколько дней охватывает период, сколько столбиков рисуем и какой у столбика
+ * шаг в днях.
+ *
+ * У одного дня столбиков четырнадцать: почасовых данных нет, а один столбик
+ * графиком не назовёшь. Плитки показывают выбранный день, график — как он
+ * смотрится рядом с соседними.
+ */
+const PERIOD_SHAPE: Record<Period, { days: number; points: number; step: number }> = {
+  day: { days: 1, points: 14, step: 1 },
+  week: { days: 7, points: 7, step: 1 },
+  month: { days: 30, points: 30, step: 1 },
+  // На 90 днях столбики стали бы по три пикселя, поэтому группируем в недели.
+  quarter: { days: 90, points: 13, step: 7 },
+};
+
+const PERIOD_SCALE: Record<Period, number> = {
+  day: 0.145,
+  week: 1,
+  month: 4.2,
+  quarter: 13,
+};
+
+/**
+ * Порядок — воронка: увидели, нажали, заказали, выкупили, заплатили.
+ * Дальше следствия: вернули, пожаловались, осталось на складе.
+ */
+const METRICS = [
+  'views',
+  'clicks',
+  'orders',
+  'sales',
+  'revenue',
+  'returns',
+  'claims',
+  'stock',
+] as const;
+
+type MetricKey = (typeof METRICS)[number];
+
+const METRIC_LABELS: Record<MetricKey, TranslationKey> = {
+  views: 'metricViews',
+  clicks: 'metricClicks',
+  orders: 'metricOrders',
+  sales: 'sold',
+  revenue: 'metricRevenue',
+  returns: 'metricReturns',
+  claims: 'claimsTitle',
+  stock: 'metricStock',
+};
+
+type Metric = {
+  value: number;
+  /** Изменение к предыдущему такому же периоду. */
+  delta: number;
+  /** Проценты или штуки: у претензий доля мало о чём говорит. */
+  deltaKind: 'percent' | 'absolute';
+  /** Рост претензий — плохо, рост продаж — хорошо. Выводить из знака нельзя. */
+  good: boolean;
+  unit: TranslationKey | null;
+  series: readonly number[];
+};
+
+/**
+ * Детерминированный ряд для заглушки: одинаковый при каждом рендере,
+ * но с живой формой. Math.random дал бы новую картинку на каждый кадр.
+ */
+function series(seed: number, points: number, base: number, swing: number): number[] {
+  const out: number[] = [];
+  let value = base;
+  let state = seed;
+
+  for (let i = 0; i < points; i += 1) {
+    state = (state * 1103515245 + 12345) % 2147483648;
+    value = Math.max(1, Math.round(value + (state / 2147483648 - 0.48) * swing));
+    out.push(value);
+  }
+
+  return out;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function startOfDay(date: Date): Date {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function shiftDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * DAY_MS);
+}
+
+function formatDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}`;
+}
+
+function sameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+type Snapshot = {
+  metrics: Record<MetricKey, Metric>;
+};
+
+/**
+ * Заглушка. Форма повторяет то, что вернёт API.
+ *
+ * По продажам и претензиям история в базе уже есть — там строки с датами.
+ * По остаткам её нет: они хранятся снимками на дату, а выгрузка ещё ни разу
+ * не отрабатывала. Кривая остатков начнёт заполняться с первого запуска.
+ */
+function snapshot(id: MarketplaceId, period: Period): Snapshot {
+  const { points } = PERIOD_SHAPE[period];
+  const scale = PERIOD_SCALE[period];
+  const wb = id === 'wb';
+  const seed = (wb ? 7 : 31) + points;
+
+  // Дельта не одна на все периоды: на неделе и на квартале движение разное,
+  // а одинаковый процент выдал бы заглушку с головой.
+  const drift = period === 'week' ? 0 : period === 'month' ? 1 : period === 'quarter' ? -3 : 2;
+  const claimsValue = Math.max(1, Math.round((wb ? 8 : 2) * scale));
+
+  // Числа заглушки согласованы как воронка: показов больше нажатий,
+  // нажатий больше заказов, выкупов меньше заказов. Иначе экран сам себе
+  // противоречит, и доверия к нему нет даже на макете.
+  const metrics: Record<MetricKey, Metric> = {
+    views: {
+      value: Math.round((wb ? 100_000 : 17_000) * scale),
+      delta: (wb ? 9 : 4) + drift,
+      deltaKind: 'percent',
+      good: true,
+      unit: null,
+      series: series(seed + 4, points, wb ? 14_300 : 2_430, wb ? 4_000 : 800),
+    },
+    clicks: {
+      value: Math.round((wb ? 8_000 : 1_300) * scale),
+      delta: (wb ? 14 : 6) + drift,
+      deltaKind: 'percent',
+      good: true,
+      unit: null,
+      series: series(seed + 5, points, wb ? 1_140 : 185, wb ? 350 : 70),
+    },
+    orders: {
+      value: Math.round((wb ? 780 : 142) * scale),
+      delta: (wb ? 11 : 5) + drift,
+      deltaKind: 'percent',
+      good: true,
+      unit: 'totalPairs',
+      series: series(seed + 6, points, wb ? 112 : 21, wb ? 42 : 11),
+    },
+    returns: {
+      value: Math.round((wb ? 45 : 9) * scale),
+      delta: (wb ? 3 : 1) + drift,
+      deltaKind: 'percent',
+      good: false,
+      unit: 'totalPairs',
+      series: series(seed + 7, points, wb ? 7 : 2, 5),
+    },
+    sales: {
+      value: Math.round((wb ? 660 : 120) * scale),
+      delta: (wb ? 12 : 5) + drift,
+      deltaKind: 'percent',
+      good: true,
+      unit: 'totalPairs',
+      series: series(seed, points, wb ? 95 : 18, wb ? 40 : 10),
+    },
+    revenue: {
+      value: Math.round((wb ? 960_000 : 168_000) * scale),
+      delta: (wb ? 8 : 3) + drift,
+      deltaKind: 'percent',
+      good: true,
+      unit: 'currencyRuble',
+      series: series(seed + 1, points, wb ? 138_000 : 24_000, wb ? 55_000 : 12_000),
+    },
+    stock: {
+      value: wb ? 50_575 : 12_480,
+      delta: (wb ? -4 : -1) - (period === 'quarter' ? 3 : 0),
+      deltaKind: 'percent',
+      good: false,
+      unit: 'totalPairs',
+      series: series(seed + 2, points, wb ? 52_000 : 12_900, wb ? 900 : 300),
+    },
+    claims: {
+      value: claimsValue,
+      // Претензии считаем в штуках: доля от четырёх до одиннадцати дала бы
+      // «+175 %» и пугала бы сильнее, чем стоит.
+      delta: Math.max(1, Math.round(claimsValue * 0.25)),
+      deltaKind: 'absolute',
+      good: false,
+      unit: null,
+      series: series(seed + 3, points, wb ? 2 : 1, 3),
+    },
+  };
+
+  return { metrics };
+}
+
+const CHART_HEIGHT = 56;
+const BAR_MIN_HEIGHT = 3;
+
+function grouped(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+/**
+ * Значение за предыдущий период. Считается из текущего и дельты, а не хранится
+ * рядом: так «было» и процент не разъедутся, если поправить одно из них.
+ */
+function previousValue(metric: Metric): number {
+  if (metric.deltaKind === 'absolute') {
+    return metric.value - metric.delta;
+  }
+  return Math.round(metric.value / (1 + metric.delta / 100));
+}
+
+function formatDelta(metric: Metric): string {
+  const sign = metric.delta > 0 ? '+' : metric.delta < 0 ? '−' : '';
+  const size = Math.abs(metric.delta);
+  return metric.deltaKind === 'percent' ? `${sign}${size} %` : `${sign}${size}`;
+}
+
+function Calendar({ value, onPick }: { value: Date; onPick: (date: Date) => void }) {
+  const { t } = useTranslation();
+  const [view, setView] = useState(() => new Date(value.getFullYear(), value.getMonth(), 1));
+
+  const months = t('monthNames').split(',');
+  const weekdays = t('weekdayNames').split(',');
+  const today = startOfDay(new Date());
+
+  const daysInMonth = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
+  // Неделя начинается с понедельника, а getDay() считает от воскресенья.
+  const offset = (new Date(view.getFullYear(), view.getMonth(), 1).getDay() + 6) % 7;
+
+  const cells: (number | null)[] = [
+    ...Array<null>(offset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  const rows: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    rows.push(cells.slice(i, i + 7));
+  }
+
+  const step = (delta: number) =>
+    setView(new Date(view.getFullYear(), view.getMonth() + delta, 1));
+
+  return (
+    <View style={styles.calendar}>
+      <View style={styles.calendarHead}>
+        <Pressable onPress={() => step(-1)} hitSlop={8} style={styles.calendarArrow}>
+          <Text style={styles.calendarArrowText}>‹</Text>
+        </Pressable>
+        <Text style={styles.calendarMonth}>
+          {months[view.getMonth()]} {view.getFullYear()}
+        </Text>
+        <Pressable onPress={() => step(1)} hitSlop={8} style={styles.calendarArrow}>
+          <Text style={styles.calendarArrowText}>›</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.calendarRow}>
+        {weekdays.map((name) => (
+          <Text key={name} style={styles.calendarWeekday}>
+            {name}
+          </Text>
+        ))}
+      </View>
+
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} style={styles.calendarRow}>
+          {row.map((day, dayIndex) => {
+            if (day === null) {
+              return <View key={dayIndex} style={styles.calendarCell} />;
+            }
+
+            const date = new Date(view.getFullYear(), view.getMonth(), day);
+            // Будущее выбирать нечем: данных за него ещё нет.
+            const future = date.getTime() > today.getTime();
+            const picked = sameDay(date, value);
+
+            return (
+              <Pressable
+                key={dayIndex}
+                disabled={future}
+                onPress={() => onPick(date)}
+                style={[styles.calendarCell, picked && styles.calendarCellPicked]}>
+                <Text
+                  style={[
+                    styles.calendarDay,
+                    future && styles.calendarDayFuture,
+                    picked && styles.calendarDayPicked,
+                  ]}>
+                  {day}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function MarketplaceHistoryScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  if (!isMarketplaceId(id)) {
+  const [period, setPeriod] = useState<Period>('month');
+  const [metric, setMetric] = useState<MetricKey>('sales');
+  const [endDate, setEndDate] = useState(() => startOfDay(new Date()));
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [pickedBar, setPickedBar] = useState<number | null>(null);
+
+  const data = useMemo(
+    () => (isMarketplaceId(id) ? snapshot(id, period) : null),
+    [id, period],
+  );
+
+  if (!isMarketplaceId(id) || !data) {
     return <Redirect href="/marketplaces" />;
   }
 
+  const accent = Brand[id].accent;
+  const shape = PERIOD_SHAPE[period];
+  const current = data.metrics[metric];
+  const peak = Math.max(...current.series, 1);
+
+  /** Дата, которой соответствует столбик. У квартала шаг — неделя. */
+  const barDate = (index: number) =>
+    shiftDays(endDate, -(shape.points - 1 - index) * shape.step);
+
+  const picked =
+    pickedBar === null
+      ? null
+      : { date: barDate(pickedBar), value: current.series[pickedBar] };
+
   return (
     <MarketplaceShell id={id} active="history">
-      <View style={styles.content}>
-        <Text style={styles.title}>{t('tabHistory')}</Text>
-        <Text style={styles.hint}>{t('sectionEmpty')}</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.segments}>
+          {PERIODS.map((key) => {
+            const active = key === period;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => {
+                  setPeriod(key);
+                  setPickedBar(null);
+                }}
+                style={[styles.segment, active && styles.segmentActive]}>
+                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                  {t(PERIOD_LABELS[key])}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Даты названы явно: «за 30 дней» само по себе не говорит, какие
+            именно тридцать и с чем их сравнивают. */}
+        <Pressable
+          onPress={() => setCalendarOpen(!calendarOpen)}
+          style={({ pressed }) => [styles.basisRow, pressed && styles.pressed]}>
+          <Text style={styles.basis}>
+            {period === 'day'
+              ? t('periodSingle', {
+                  date: formatDate(endDate),
+                  previous: formatDate(shiftDays(endDate, -1)),
+                })
+              : t('periodRange', {
+                  from: formatDate(shiftDays(endDate, -(shape.days - 1))),
+                  to: formatDate(endDate),
+                  days: shape.days,
+                })}
+          </Text>
+          <Text style={styles.basisChevron}>{calendarOpen ? '⌃' : '⌄'}</Text>
+        </Pressable>
+
+        {calendarOpen ? (
+          <Calendar
+            value={endDate}
+            onPick={(date) => {
+              setEndDate(date);
+              setCalendarOpen(false);
+              setPickedBar(null);
+            }}
+          />
+        ) : null}
+
+        {/* Плитки — и сводка, и переключатель графика: отдельный список
+            показателей занял бы место и повторял бы эти же слова. */}
+        <View style={styles.tiles}>
+          {METRICS.map((key) => {
+            const item = data.metrics[key];
+            const active = key === metric;
+            const rising = item.delta > 0;
+            const positive = rising === item.good;
+
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setMetric(key)}
+                style={({ pressed }) => [
+                  styles.tile,
+                  active && { borderColor: accent, backgroundColor: tint(accent) },
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={styles.tileLabel}>{t(METRIC_LABELS[key])}</Text>
+                <View style={styles.tileValueRow}>
+                  <Text style={styles.tileValue}>{grouped(item.value)}</Text>
+                  {item.unit ? <Text style={styles.tileUnit}>{t(item.unit)}</Text> : null}
+                </View>
+                <View style={styles.tileFoot}>
+                  <Text
+                    style={[styles.tileDelta, { color: positive ? Palette.ok : Palette.warn }]}>
+                    {formatDelta(item)}
+                  </Text>
+                  <Text style={styles.tileWas}>
+                    {t('wasBefore', { value: grouped(previousValue(item)) })}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHead}>
+            <Text style={styles.label}>
+              {t(METRIC_LABELS[metric])} {t(period === 'quarter' ? 'byWeeks' : 'byDays')}
+            </Text>
+            {/* Пока столбик не выбран — единица измерения, после выбора —
+                дата и число: подписывать каждый столбик негде. */}
+            {picked ? (
+              <Text style={styles.headPicked}>
+                {formatDate(picked.date)} · {grouped(picked.value)}
+                {current.unit ? ` ${t(current.unit)}` : ''}
+              </Text>
+            ) : current.unit ? (
+              <Text style={styles.headUnit}>{t(current.unit)}</Text>
+            ) : null}
+          </View>
+
+          <View style={styles.chart}>
+            {current.series.map((value, index) => {
+              const dimmed = pickedBar !== null && pickedBar !== index;
+              return (
+                <Pressable
+                  key={index}
+                  onPress={() => setPickedBar(pickedBar === index ? null : index)}
+                  style={styles.barCell}>
+                  <View
+                    style={[
+                      styles.bar,
+                      dimmed && styles.barDimmed,
+                      {
+                        height: Math.max(
+                          BAR_MIN_HEIGHT,
+                          Math.round((value / peak) * CHART_HEIGHT),
+                        ),
+                        backgroundColor: accent,
+                      },
+                    ]}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.axis}>
+            <Text style={styles.axisLabel}>{formatDate(barDate(0))}</Text>
+            <Text style={styles.axisLabel}>
+              {formatDate(barDate(Math.floor((shape.points - 1) / 2)))}
+            </Text>
+            <Text style={styles.axisLabel}>{formatDate(endDate)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.sync}>
+          <View style={styles.pulse} />
+          <Text style={styles.syncText}>{t('dataUpdated', { hours: 2 })}</Text>
+        </View>
+      </ScrollView>
     </MarketplaceShell>
   );
 }
 
+/** Заливка выбранной плитки: цвет маркетплейса в 5 % поверх белого. */
+function tint(hex: string): string {
+  const value = parseInt(hex.slice(1), 16);
+  const mix = (channel: number) => Math.round(channel * 0.05 + 255 * 0.95);
+  return `rgb(${mix((value >> 16) & 255)}, ${mix((value >> 8) & 255)}, ${mix(value & 255)})`;
+}
+
 const styles = StyleSheet.create({
   content: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 22,
+    gap: 9,
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+
+  segments: {
+    flexDirection: 'row',
+    gap: 5,
+  },
+  segment: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 18,
-    paddingBottom: 40,
+    paddingVertical: 7,
+    borderRadius: 9,
+    backgroundColor: Palette.field,
   },
-  title: {
-    fontSize: 19,
-    fontWeight: '700',
-    letterSpacing: -0.19,
+  segmentActive: {
+    backgroundColor: Palette.ink,
+  },
+  segmentText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: Palette.muted,
+  },
+  segmentTextActive: {
+    fontWeight: '600',
+    color: Palette.paper,
+  },
+
+  basisRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  basis: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+    color: Palette.muted,
+  },
+  basisChevron: {
+    fontSize: 12,
+    color: Palette.muted,
+  },
+
+  calendar: {
+    backgroundColor: Palette.paper,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: Radius.card,
+    padding: 12,
+  },
+  calendarHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  calendarArrow: {
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+  calendarArrowText: {
+    fontSize: 17,
+    color: Palette.muted,
+  },
+  calendarMonth: {
+    fontSize: 13.5,
+    fontWeight: '600',
     color: Palette.ink,
   },
-  hint: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: Palette.muted,
+  calendarRow: {
+    flexDirection: 'row',
+  },
+  calendarWeekday: {
+    flex: 1,
     textAlign: 'center',
-    marginTop: 8,
+    fontSize: 10,
+    color: Palette.dim,
+    paddingBottom: 4,
+  },
+  calendarCell: {
+    flex: 1,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  calendarCellPicked: {
+    backgroundColor: Palette.ink,
+  },
+  calendarDay: {
+    fontFamily: Fonts.mono,
+    fontSize: 12.5,
+    color: Palette.ink,
+  },
+  calendarDayFuture: {
+    color: Palette.dim,
+  },
+  calendarDayPicked: {
+    color: Palette.paper,
+    fontWeight: '600',
+  },
+  tiles: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+  },
+  tile: {
+    // Ровно два в ряд: половина ширины минус половина зазора.
+    width: '48.5%',
+    flexGrow: 1,
+    backgroundColor: Palette.paper,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: Radius.card,
+    padding: 13,
+  },
+  tileLabel: {
+    fontFamily: Fonts.mono,
+    fontSize: 9.5,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: Palette.muted,
+  },
+  tileValue: {
+    fontFamily: Fonts.mono,
+    fontSize: 19,
+    fontWeight: '600',
+    color: Palette.ink,
+  },
+  tileValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginTop: 5,
+  },
+  tileFoot: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+    marginTop: 3,
+    flexWrap: 'wrap',
+  },
+  tileDelta: {
+    fontFamily: Fonts.mono,
+    fontSize: 10.5,
+    fontWeight: '500',
+  },
+  tileWas: {
+    fontFamily: Fonts.mono,
+    fontSize: 10.5,
+    color: Palette.dim,
+  },
+  tileUnit: {
+    fontSize: 11,
+    color: Palette.muted,
+  },
+
+  card: {
+    backgroundColor: Palette.paper,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: Radius.card,
+    padding: 15,
+  },
+  cardHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 13,
+  },
+  label: {
+    fontFamily: Fonts.mono,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: Palette.muted,
+  },
+  headUnit: {
+    fontFamily: Fonts.mono,
+    fontSize: 10,
+    color: Palette.dim,
+  },
+  headPicked: {
+    fontFamily: Fonts.mono,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Palette.ink,
+  },
+
+  chart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+    height: CHART_HEIGHT,
+  },
+  barCell: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    width: '100%',
+    borderRadius: 2,
+  },
+  barDimmed: {
+    opacity: 0.3,
+  },
+  axis: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  axisLabel: {
+    fontSize: 9.5,
+    color: Palette.muted,
+  },
+
+  sync: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 4,
+  },
+  pulse: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Palette.ok,
+  },
+  syncText: {
+    fontFamily: Fonts.mono,
+    fontSize: 11.5,
+    color: Palette.muted,
   },
 });

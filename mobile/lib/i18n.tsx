@@ -93,6 +93,26 @@ const ru = {
   claimResolved: 'Решена',
   stockUpdated: 'Остатки обновлены {hours} ч назад',
 
+  periodQuarter: '90 дней',
+  metricViews: 'Просмотры',
+  metricClicks: 'Клики',
+  metricOrders: 'Заказы',
+  metricRevenue: 'Выручка',
+  metricReturns: 'Возвраты',
+  metricStock: 'Остатки',
+  byDays: 'по дням',
+  byWeeks: 'по неделям',
+  periodRange: 'Период {from} — {to} · сравнение с предыдущими {days} днями',
+  periodSingle: 'Период {date} · сравнение с {previous}',
+  // Списком одной строкой: двенадцать отдельных ключей на месяцы и семь
+  // на дни недели раздули бы словарь ради двух подписей в календаре.
+  monthNames: 'Январь,Февраль,Март,Апрель,Май,Июнь,Июль,Август,Сентябрь,Октябрь,Ноябрь,Декабрь',
+  weekdayNames: 'Пн,Вт,Ср,Чт,Пт,Сб,Вс',
+  pickDate: 'Выбрать дату',
+  wasBefore: 'было {value}',
+  currencyRuble: '₽',
+  dataUpdated: 'Данные обновлены {hours} ч назад',
+
   sectionEmpty: 'Раздел ещё не собран',
 
   tabDashboard: 'Дашборд',
@@ -179,6 +199,24 @@ const zh: Dictionary = {
   claimOpen: '待回复',
   claimResolved: '已解决',
   stockUpdated: '库存 {hours} 小时前更新',
+
+  periodQuarter: '90天',
+  metricViews: '浏览',
+  metricClicks: '点击',
+  metricOrders: '订单',
+  metricRevenue: '营收',
+  metricReturns: '退货',
+  metricStock: '库存',
+  byDays: '按天',
+  byWeeks: '按周',
+  periodRange: '周期 {from} — {to} · 与前 {days} 天对比',
+  periodSingle: '周期 {date} · 与 {previous} 对比',
+  monthNames: '一月,二月,三月,四月,五月,六月,七月,八月,九月,十月,十一月,十二月',
+  weekdayNames: '一,二,三,四,五,六,日',
+  pickDate: '选择日期',
+  wasBefore: '此前 {value}',
+  currencyRuble: '₽',
+  dataUpdated: '数据 {hours} 小时前更新',
 
   sectionEmpty: '该模块尚未开发',
 
