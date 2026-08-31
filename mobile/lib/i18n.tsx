@@ -36,8 +36,9 @@ const ru = {
 
   back: 'Назад',
   articles: '{count} артикулов',
-  inStock: 'на складе',
-  netProfit: 'чистая прибыль за 7 дней',
+  cardStock: 'пар на складе',
+  cardSold: 'продано, 30 дней',
+  cardRevenue: 'выручка, ₽',
 
   articleSearch: 'Артикул или название',
   categoryLabel: 'Категория',
@@ -123,8 +124,9 @@ const zh: Dictionary = {
 
   back: '返回',
   articles: '{count} 个商品',
-  inStock: '库存',
-  netProfit: '近7天净利润',
+  cardStock: '双 · 在库',
+  cardSold: '30天销量',
+  cardRevenue: '营收, ₽',
 
   articleSearch: '商品编号或名称',
   categoryLabel: '类目',

@@ -5,8 +5,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LanguageSwitch } from '@/components/language-switch';
+import { AdsIcon, ArticleIcon, HistoryIcon, MoreIcon } from '@/components/tab-icons';
 import { Brand, Palette, Radius } from '@/constants/design';
-import { Fonts } from '@/constants/theme';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { marketplaceHref, type MarketplaceId, type MarketplaceTab } from '@/lib/marketplaces';
 
@@ -14,16 +14,16 @@ export type TabKey = 'article' | 'history' | 'ads' | 'more';
 
 type Tab = {
   key: TabKey;
-  glyph: string;
+  Icon: (props: { color: string }) => React.ReactElement;
   label: TranslationKey;
   tab: MarketplaceTab;
 };
 
 const TABS: readonly Tab[] = [
-  { key: 'article', glyph: '⌕', label: 'tabArticle', tab: 'article' },
-  { key: 'history', glyph: '◔', label: 'tabHistory', tab: 'history' },
-  { key: 'ads', glyph: '▣', label: 'tabAds', tab: 'ads' },
-  { key: 'more', glyph: '≡', label: 'tabMore', tab: 'more' },
+  { key: 'article', Icon: ArticleIcon, label: 'tabArticle', tab: 'article' },
+  { key: 'history', Icon: HistoryIcon, label: 'tabHistory', tab: 'history' },
+  { key: 'ads', Icon: AdsIcon, label: 'tabAds', tab: 'ads' },
+  { key: 'more', Icon: MoreIcon, label: 'tabMore', tab: 'more' },
 ];
 
 type Props = {
@@ -82,7 +82,9 @@ export function MarketplaceShell({ id, active, children, showBack = true }: Prop
               disabled={current}
               onPress={() => router.replace(marketplaceHref(id, tab.tab))}
               style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}>
-              <Text style={[styles.tabGlyph, { color }]}>{tab.glyph}</Text>
+              <View style={styles.tabIcon}>
+                <tab.Icon color={color} />
+              </View>
               <Text style={[styles.tabLabel, { color }]}>{t(tab.label)}</Text>
             </Pressable>
           );
@@ -150,11 +152,9 @@ const styles = StyleSheet.create({
   tabPressed: {
     opacity: 0.6,
   },
-  tabGlyph: {
-    fontFamily: Fonts.mono,
-    fontSize: 19.5,
-    lineHeight: 24,
-    fontWeight: '600',
+  tabIcon: {
+    height: 24,
+    justifyContent: 'center',
     marginBottom: 3,
   },
   tabLabel: {

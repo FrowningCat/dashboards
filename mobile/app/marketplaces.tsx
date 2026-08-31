@@ -14,8 +14,9 @@ type Marketplace = {
   id: MarketplaceId;
   gradient: readonly [string, string];
   articles: string;
-  inStock: string;
-  netProfit: string;
+  stock: string;
+  sold: string;
+  revenue: string;
 };
 
 /**
@@ -28,8 +29,11 @@ const MARKETPLACES: readonly Marketplace[] = [
     id: 'wb',
     gradient: Brand.wb.gradient,
     articles: '1 138',
-    inStock: '363',
-    netProfit: '2,4 млн ₽',
+    // Те же числа, что показывает «История»: одна и та же величина не должна
+    // отличаться от экрана к экрану.
+    stock: '50 575',
+    sold: '2 772',
+    revenue: '4,0 млн',
   },
 ];
 
@@ -75,12 +79,16 @@ export default function MarketplacesScreen() {
 
               <View style={styles.stats}>
                 <View style={styles.stat}>
-                  <Text style={styles.statValue}>{marketplace.inStock}</Text>
-                  <Text style={styles.statLabel}>{t('inStock')}</Text>
+                  <Text style={styles.statValue}>{marketplace.stock}</Text>
+                  <Text style={styles.statLabel}>{t('cardStock')}</Text>
                 </View>
                 <View style={styles.stat}>
-                  <Text style={styles.statValue}>{marketplace.netProfit}</Text>
-                  <Text style={styles.statLabel}>{t('netProfit')}</Text>
+                  <Text style={styles.statValue}>{marketplace.sold}</Text>
+                  <Text style={styles.statLabel}>{t('cardSold')}</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statValue}>{marketplace.revenue}</Text>
+                  <Text style={styles.statLabel}>{t('cardRevenue')}</Text>
                 </View>
               </View>
             </LinearGradient>
@@ -173,7 +181,10 @@ const styles = StyleSheet.create({
 
   stats: {
     flexDirection: 'row',
-    gap: 18,
+    // Зазор и кегль подписи подобраны так, чтобы «продано, 30 дней»
+    // укладывалось в строку даже на 320 пикселях: иначе одна колонка
+    // переносится, а две соседние — нет, и ряд выглядит неровным.
+    gap: 10,
     marginTop: 16,
   },
   stat: {
@@ -181,13 +192,13 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontFamily: Fonts.mono,
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: '600',
-    letterSpacing: -0.38,
+    letterSpacing: -0.34,
     color: Palette.paper,
   },
   statLabel: {
-    fontSize: 10.5,
+    fontSize: 9,
     color: Palette.paper,
     opacity: 0.78,
     marginTop: 2,
