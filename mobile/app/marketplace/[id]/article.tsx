@@ -156,19 +156,6 @@ const SHOES = [
   { size: '43', quantity: 2 },
 ] as const;
 
-const OZ_BOOTS = [
-  { size: '40', quantity: 9 },
-  { size: '41', quantity: 14 },
-  { size: '42', quantity: 11 },
-  { size: '43', quantity: 5 },
-] as const;
-
-const OZ_SNEAKERS = [
-  { size: '41', quantity: 3 },
-  { size: '42', quantity: 8 },
-  { size: '43', quantity: 4 },
-] as const;
-
 /**
  * Заглушка. Форма повторяет то, что вернёт API, поэтому подмена сведётся
  * к замене константы на запрос.
@@ -273,55 +260,7 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       ],
       stockAgeHours: 2,
     },
-  ],
-  ozon: [
-    {
-      nmId: 1544820193,
-      vendorCode: 'ШМ-1043',
-      name: 'Ботинки зимние, нубук',
-      category: 'Ботинки',
-      season: 'Зима',
-      rating: 4.6,
-      reviews: 54,
-      sizes: OZ_BOOTS,
-      warehouses: [warehouse('Хоругвино', 27, OZ_BOOTS, 7, 2), warehouse('Склад продавца', 12, OZ_BOOTS, 3, 1)],
-      sales: {
-        day: sales(1, 1_800, OZ_BOOTS),
-        week: sales(7, 12_600, OZ_BOOTS),
-        month: sales(31, 55_800, OZ_BOOTS),
-        all: sales(288, 518_000, OZ_BOOTS),
-      },
-      claims: [],
-      stockAgeHours: 5,
-    },
-    {
-      nmId: 1601773540,
-      vendorCode: 'ШМ-0871',
-      name: 'Кроссовки летние, сетка',
-      category: 'Кроссовки',
-      season: 'Лето',
-      rating: 4.8,
-      reviews: 97,
-      sizes: OZ_SNEAKERS,
-      warehouses: [warehouse('Хоругвино', 15, OZ_SNEAKERS, 4, 1)],
-      sales: {
-        day: sales(2, 2_800, OZ_SNEAKERS),
-        week: sales(11, 15_300, OZ_SNEAKERS),
-        month: sales(44, 61_200, OZ_SNEAKERS),
-        all: sales(619, 861_000, OZ_SNEAKERS),
-      },
-      claims: [
-        {
-          id: 'c-5',
-          date: '25.08',
-          type: 'Брак',
-          comment: 'Отклеилась подошва',
-          resolved: false,
-        },
-      ],
-      stockAgeHours: 5,
-    },
-  ],
+  ]
 };
 
 /** Ниже этого порога размер подсвечивается: он вот-вот кончится. */

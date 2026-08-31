@@ -1,13 +1,12 @@
 import type { Href } from 'expo-router';
 
-export const MARKETPLACE_IDS = ['wb', 'ozon'] as const;
+export const MARKETPLACE_IDS = ['wb'] as const;
 
 export type MarketplaceId = (typeof MARKETPLACE_IDS)[number];
 
 /** Названия брендов не переводятся и в словарь не идут. */
 export const MARKETPLACE_NAMES: Record<MarketplaceId, string> = {
   wb: 'Wildberries',
-  ozon: 'Ozon',
 };
 
 /**
@@ -19,7 +18,7 @@ export function isMarketplaceId(value: string | undefined): value is Marketplace
   return value !== undefined && (MARKETPLACE_IDS as readonly string[]).includes(value);
 }
 
-export type MarketplaceTab = 'article' | 'history' | 'more';
+export type MarketplaceTab = 'article' | 'history' | 'ads' | 'more';
 
 /**
  * Адреса экранов маркетплейса. Все переходы идут отсюда, чтобы приведение

@@ -10,20 +10,19 @@ import { Fonts } from '@/constants/theme';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { marketplaceHref, type MarketplaceId, type MarketplaceTab } from '@/lib/marketplaces';
 
-export type TabKey = 'dashboard' | 'article' | 'history' | 'more';
+export type TabKey = 'article' | 'history' | 'ads' | 'more';
 
 type Tab = {
   key: TabKey;
   glyph: string;
   label: TranslationKey;
-  /** Раздел в адресе. У дашборда его нет — он корневой экран маркетплейса. */
-  tab?: MarketplaceTab;
+  tab: MarketplaceTab;
 };
 
 const TABS: readonly Tab[] = [
-  { key: 'dashboard', glyph: '◧', label: 'tabDashboard' },
   { key: 'article', glyph: '⌕', label: 'tabArticle', tab: 'article' },
   { key: 'history', glyph: '◔', label: 'tabHistory', tab: 'history' },
+  { key: 'ads', glyph: '▣', label: 'tabAds', tab: 'ads' },
   { key: 'more', glyph: '≡', label: 'tabMore', tab: 'more' },
 ];
 

@@ -31,13 +31,6 @@ const MARKETPLACES: readonly Marketplace[] = [
     inStock: '363',
     netProfit: '2,4 млн ₽',
   },
-  {
-    id: 'ozon',
-    gradient: Brand.ozon.gradient,
-    articles: '368',
-    inStock: '121',
-    netProfit: '418 тыс ₽',
-  },
 ];
 
 export default function MarketplacesScreen() {

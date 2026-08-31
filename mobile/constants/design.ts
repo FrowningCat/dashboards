@@ -48,8 +48,4 @@ export const Brand = {
     /** Карточка выбора: от тёмного к яркому. */
     gradient: ['#7A0A80', '#CB11AB'],
   },
-  ozon: {
-    accent: '#005BFF',
-    gradient: ['#0037A8', '#005BFF'],
-  },
 } as const;

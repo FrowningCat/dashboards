@@ -6,7 +6,7 @@ import { MarketplaceShell } from '@/components/marketplace-shell';
 import { Brand, Palette, Radius } from '@/constants/design';
 import { Fonts } from '@/constants/theme';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
-import { isMarketplaceId, type MarketplaceId } from '@/lib/marketplaces';
+import { isMarketplaceId } from '@/lib/marketplaces';
 
 const PERIODS = ['day', 'week', 'month', 'quarter'] as const;
 
@@ -137,76 +137,75 @@ type Snapshot = {
  * По остаткам её нет: они хранятся снимками на дату, а выгрузка ещё ни разу
  * не отрабатывала. Кривая остатков начнёт заполняться с первого запуска.
  */
-function snapshot(id: MarketplaceId, period: Period): Snapshot {
+function snapshot(period: Period): Snapshot {
   const { points } = PERIOD_SHAPE[period];
   const scale = PERIOD_SCALE[period];
-  const wb = id === 'wb';
-  const seed = (wb ? 7 : 31) + points;
+  const seed = 7 + points;
 
   // Дельта не одна на все периоды: на неделе и на квартале движение разное,
   // а одинаковый процент выдал бы заглушку с головой.
   const drift = period === 'week' ? 0 : period === 'month' ? 1 : period === 'quarter' ? -3 : 2;
-  const claimsValue = Math.max(1, Math.round((wb ? 8 : 2) * scale));
+  const claimsValue = Math.max(1, Math.round(8 * scale));
 
   // Числа заглушки согласованы как воронка: показов больше нажатий,
   // нажатий больше заказов, выкупов меньше заказов. Иначе экран сам себе
   // противоречит, и доверия к нему нет даже на макете.
   const metrics: Record<MetricKey, Metric> = {
     views: {
-      value: Math.round((wb ? 100_000 : 17_000) * scale),
-      delta: (wb ? 9 : 4) + drift,
+      value: Math.round(100_000 * scale),
+      delta: 9 + drift,
       deltaKind: 'percent',
       good: true,
       unit: null,
-      series: series(seed + 4, points, wb ? 14_300 : 2_430, wb ? 4_000 : 800),
+      series: series(seed + 4, points, 14_300, 4_000),
     },
     clicks: {
-      value: Math.round((wb ? 8_000 : 1_300) * scale),
-      delta: (wb ? 14 : 6) + drift,
+      value: Math.round(8_000 * scale),
+      delta: 14 + drift,
       deltaKind: 'percent',
       good: true,
       unit: null,
-      series: series(seed + 5, points, wb ? 1_140 : 185, wb ? 350 : 70),
+      series: series(seed + 5, points, 1_140, 350),
     },
     orders: {
-      value: Math.round((wb ? 780 : 142) * scale),
-      delta: (wb ? 11 : 5) + drift,
+      value: Math.round(780 * scale),
+      delta: 11 + drift,
       deltaKind: 'percent',
       good: true,
       unit: 'totalPairs',
-      series: series(seed + 6, points, wb ? 112 : 21, wb ? 42 : 11),
+      series: series(seed + 6, points, 112, 42),
     },
     returns: {
-      value: Math.round((wb ? 45 : 9) * scale),
-      delta: (wb ? 3 : 1) + drift,
+      value: Math.round(45 * scale),
+      delta: 3 + drift,
       deltaKind: 'percent',
       good: false,
       unit: 'totalPairs',
-      series: series(seed + 7, points, wb ? 7 : 2, 5),
+      series: series(seed + 7, points, 7, 5),
     },
     sales: {
-      value: Math.round((wb ? 660 : 120) * scale),
-      delta: (wb ? 12 : 5) + drift,
+      value: Math.round(660 * scale),
+      delta: 12 + drift,
       deltaKind: 'percent',
       good: true,
       unit: 'totalPairs',
-      series: series(seed, points, wb ? 95 : 18, wb ? 40 : 10),
+      series: series(seed, points, 95, 40),
     },
     revenue: {
-      value: Math.round((wb ? 960_000 : 168_000) * scale),
-      delta: (wb ? 8 : 3) + drift,
+      value: Math.round(960_000 * scale),
+      delta: 8 + drift,
       deltaKind: 'percent',
       good: true,
       unit: 'currencyRuble',
-      series: series(seed + 1, points, wb ? 138_000 : 24_000, wb ? 55_000 : 12_000),
+      series: series(seed + 1, points, 138_000, 55_000),
     },
     stock: {
-      value: wb ? 50_575 : 12_480,
-      delta: (wb ? -4 : -1) - (period === 'quarter' ? 3 : 0),
+      value: 50_575,
+      delta: -4 - (period === 'quarter' ? 3 : 0),
       deltaKind: 'percent',
       good: false,
       unit: 'totalPairs',
-      series: series(seed + 2, points, wb ? 52_000 : 12_900, wb ? 900 : 300),
+      series: series(seed + 2, points, 52_000, 900),
     },
     claims: {
       value: claimsValue,
@@ -216,7 +215,7 @@ function snapshot(id: MarketplaceId, period: Period): Snapshot {
       deltaKind: 'absolute',
       good: false,
       unit: null,
-      series: series(seed + 3, points, wb ? 2 : 1, 3),
+      series: series(seed + 3, points, 2, 3),
     },
   };
 
@@ -343,7 +342,7 @@ export default function MarketplaceHistoryScreen() {
   const [pickedBar, setPickedBar] = useState<number | null>(null);
 
   const data = useMemo(
-    () => (isMarketplaceId(id) ? snapshot(id, period) : null),
+    () => (isMarketplaceId(id) ? snapshot(period) : null),
     [id, period],
   );
 

@@ -39,30 +39,6 @@ const ru = {
   inStock: 'на складе',
   netProfit: 'чистая прибыль за 7 дней',
 
-  adsIcon: 'РК',
-  adsTitle: 'Реклама',
-  adsHint: 'Показы, клики, CTR, расход',
-  adsCaption: 'CTR 7 дней',
-
-  salesIcon: 'ПР',
-  salesTitle: 'Продажи',
-  salesHint: 'Заказы, выкупы, возвраты',
-  salesCaption: 'к неделе',
-
-  stockIcon: 'ОС',
-  stockTitle: 'Остатки',
-  stockHint: 'Склады {name} и склады продавца',
-  stockCaption: 'пар на складах',
-
-  suppliesIcon: 'ПС',
-  suppliesTitle: 'Поставки',
-  suppliesHint: 'В пути и на приёмке',
-  suppliesCaption: 'в пути',
-
-  reportIcon: 'ФО',
-  reportTitle: 'Финансовый отчёт',
-  reportHint: 'Еженедельный, с выгрузкой',
-
   articleSearch: 'Артикул или название',
   categoryLabel: 'Категория',
   seasonLabel: 'Сезон',
@@ -119,7 +95,7 @@ const ru = {
 
   sectionEmpty: 'Раздел ещё не собран',
 
-  tabDashboard: 'Дашборд',
+  tabAds: 'Реклама',
   tabArticle: 'Артикул',
   tabHistory: 'История',
   tabMore: 'Ещё',
@@ -149,30 +125,6 @@ const zh: Dictionary = {
   articles: '{count} 个商品',
   inStock: '库存',
   netProfit: '近7天净利润',
-
-  adsIcon: '广告',
-  adsTitle: '广告',
-  adsHint: '展示、点击、点击率、花费',
-  adsCaption: '近7天点击率',
-
-  salesIcon: '销售',
-  salesTitle: '销售',
-  salesHint: '订单、买断、退货',
-  salesCaption: '较上周',
-
-  stockIcon: '库存',
-  stockTitle: '库存',
-  stockHint: '{name} 仓库与卖家仓库',
-  stockCaption: '双 · 在库',
-
-  suppliesIcon: '供货',
-  suppliesTitle: '供货',
-  suppliesHint: '在途与验收中',
-  suppliesCaption: '在途',
-
-  reportIcon: '财报',
-  reportTitle: '财务报表',
-  reportHint: '每周，可导出',
 
   articleSearch: '商品编号或名称',
   categoryLabel: '类目',
@@ -228,7 +180,7 @@ const zh: Dictionary = {
 
   sectionEmpty: '该模块尚未开发',
 
-  tabDashboard: '仪表板',
+  tabAds: '广告',
   tabArticle: '商品',
   tabHistory: '历史',
   tabMore: '更多',
