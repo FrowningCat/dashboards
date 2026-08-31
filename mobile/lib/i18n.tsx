@@ -64,6 +64,9 @@ const ru = {
   reportHint: 'Еженедельный, с выгрузкой',
 
   articleSearch: 'Артикул или название',
+  categoryLabel: 'Категория',
+  seasonLabel: 'Сезон',
+  filterAll: 'Все',
   articleHint: 'Найдите товар по артикулу или названию',
   articleNothing: 'Ничего не найдено',
   backToList: 'К списку',
@@ -148,6 +151,9 @@ const zh: Dictionary = {
   reportHint: '每周，可导出',
 
   articleSearch: '商品编号或名称',
+  categoryLabel: '类目',
+  seasonLabel: '季节',
+  filterAll: '全部',
   articleHint: '按编号或名称查找商品',
   articleNothing: '未找到',
   backToList: '返回列表',

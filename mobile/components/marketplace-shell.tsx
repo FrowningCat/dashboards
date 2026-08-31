@@ -31,6 +31,12 @@ type Props = {
   id: MarketplaceId;
   active: TabKey;
   children: ReactNode;
+  /**
+   * Возврат к выбору маркетплейса. Скрывается, когда экран показывает
+   * что-то вложенное со своим возвратом: две кнопки «назад», ведущие
+   * в разные места, читаются как одна и та же.
+   */
+  showBack?: boolean;
 };
 
 /**
@@ -41,7 +47,7 @@ type Props = {
  * ними накапливало бы в стеке десяток экранов, и «назад» пришлось бы
  * нажимать столько же раз.
  */
-export function MarketplaceShell({ id, active, children }: Props) {
+export function MarketplaceShell({ id, active, children, showBack = true }: Props) {
   const { t } = useTranslation();
   const accent = Brand[id].accent;
 
@@ -49,16 +55,18 @@ export function MarketplaceShell({ id, active, children }: Props) {
     <SafeAreaView style={styles.screen}>
       <StatusBar style="dark" />
 
-      <View style={styles.topBar}>
-        <Pressable
-          // Экран может быть открыт по прямой ссылке — тогда возвращаться
-          // некуда, и уходим к выбору маркетплейса.
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/marketplaces'))}
-          hitSlop={8}
-          style={({ pressed }) => [styles.back, pressed && styles.backPressed]}>
-          <Text style={styles.backChevron}>‹</Text>
-          <Text style={styles.backText}>{t('back')}</Text>
-        </Pressable>
+      <View style={[styles.topBar, !showBack && styles.topBarEnd]}>
+        {showBack ? (
+          <Pressable
+            // Экран может быть открыт по прямой ссылке — тогда возвращаться
+            // некуда, и уходим к выбору маркетплейса.
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/marketplaces'))}
+            hitSlop={8}
+            style={({ pressed }) => [styles.back, pressed && styles.backPressed]}>
+            <Text style={styles.backChevron}>‹</Text>
+            <Text style={styles.backText}>{t('back')}</Text>
+          </Pressable>
+        ) : null}
 
         <LanguageSwitch />
       </View>
@@ -100,6 +108,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 18,
     paddingTop: 8,
+  },
+  topBarEnd: {
+    // Без кнопки возврата space-between утащил бы переключатель влево.
+    justifyContent: 'flex-end',
   },
   back: {
     flexDirection: 'row',

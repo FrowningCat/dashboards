@@ -54,6 +54,9 @@ type Article = {
   nmId: number;
   vendorCode: string;
   name: string;
+  /** Категория и сезон приходят из карточки товара, поэтому не переводятся. */
+  category: string;
+  season: string;
   rating: number;
   reviews: number;
   sizes: readonly SizeStock[];
@@ -159,6 +162,8 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       nmId: 226727766,
       vendorCode: 'ШМ-1043',
       name: 'Ботинки зимние, нубук',
+      category: 'Ботинки',
+      season: 'Зима',
       rating: 4.7,
       reviews: 128,
       sizes: BOOTS,
@@ -203,6 +208,8 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       nmId: 198340115,
       vendorCode: 'ШМ-0871',
       name: 'Кроссовки летние, сетка',
+      category: 'Кроссовки',
+      season: 'Лето',
       rating: 4.9,
       reviews: 341,
       sizes: SNEAKERS,
@@ -223,6 +230,8 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       nmId: 241009338,
       vendorCode: 'ШМ-1180',
       name: 'Полуботинки кожаные',
+      category: 'Полуботинки',
+      season: 'Демисезон',
       rating: 4.2,
       reviews: 46,
       sizes: SHOES,
@@ -250,6 +259,8 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       nmId: 1544820193,
       vendorCode: 'ШМ-1043',
       name: 'Ботинки зимние, нубук',
+      category: 'Ботинки',
+      season: 'Зима',
       rating: 4.6,
       reviews: 54,
       sizes: OZ_BOOTS,
@@ -267,6 +278,8 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       nmId: 1601773540,
       vendorCode: 'ШМ-0871',
       name: 'Кроссовки летние, сетка',
+      category: 'Кроссовки',
+      season: 'Лето',
       rating: 4.8,
       reviews: 97,
       sizes: OZ_SNEAKERS,
@@ -323,6 +336,78 @@ function formatRating(rating: number, language: Language): string {
   return language === 'ru' ? text.replace('.', ',') : text;
 }
 
+type FilterKey = 'category' | 'season';
+
+/**
+ * Выпадающий список. Своя реализация вместо системного селектора: в React
+ * Native его нет, а сторонний по-разному выглядит на iOS и Android.
+ *
+ * Раскрытый перечень рисуется не здесь, а рядом на всю ширину — иначе он
+ * ужимался бы в половину строки, где стоит сама кнопка.
+ */
+function FilterButton({
+  label,
+  value,
+  open,
+  onToggle,
+}: {
+  label: string;
+  value: string | null;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={({ pressed }) => [
+        styles.filterButton,
+        open && styles.filterButtonOpen,
+        pressed && styles.linePressed,
+      ]}>
+      <View style={styles.filterTexts}>
+        <Text style={styles.filterCaption}>{label}</Text>
+        <Text style={styles.filterValue} numberOfLines={1}>
+          {value ?? t('filterAll')}
+        </Text>
+      </View>
+      <Text style={styles.filterChevron}>{open ? '⌃' : '⌄'}</Text>
+    </Pressable>
+  );
+}
+
+function FilterOptions({
+  options,
+  value,
+  onPick,
+}: {
+  options: readonly string[];
+  value: string | null;
+  onPick: (next: string | null) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <View style={styles.options}>
+      {[null, ...options].map((option) => {
+        const active = option === value;
+        return (
+          <Pressable
+            key={option ?? 'all'}
+            onPress={() => onPick(option)}
+            style={({ pressed }) => [styles.option, pressed && styles.linePressed]}>
+            <Text style={[styles.optionText, active && styles.optionTextActive]}>
+              {option ?? t('filterAll')}
+            </Text>
+            {active ? <Text style={styles.optionCheck}>✓</Text> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function MarketplaceArticleScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -330,20 +415,49 @@ export default function MarketplaceArticleScreen() {
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [openedId, setOpenedId] = useState<number | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [season, setSeason] = useState<string | null>(null);
+  const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
+
+  const catalogue = useMemo(() => (isMarketplaceId(id) ? ARTICLES[id] : []), [id]);
+
+  // Значения списков берутся из самих товаров: захардкоженный перечень
+  // разошёлся бы с данными, как только в каталоге появится новый сезон.
+  const categories = useMemo(
+    () => [...new Set(catalogue.map((article) => article.category))].sort(),
+    [catalogue],
+  );
+  const seasons = useMemo(
+    () => [...new Set(catalogue.map((article) => article.season))].sort(),
+    [catalogue],
+  );
 
   const found = useMemo(() => {
-    const catalogue = isMarketplaceId(id) ? ARTICLES[id] : [];
     const needle = query.trim().toLowerCase();
-    if (!needle) {
-      return catalogue;
-    }
-    return catalogue.filter(
-      (article) =>
+
+    return catalogue.filter((article) => {
+      if (category && article.category !== category) {
+        return false;
+      }
+      if (season && article.season !== season) {
+        return false;
+      }
+      if (!needle) {
+        return true;
+      }
+      return (
         article.vendorCode.toLowerCase().includes(needle) ||
         article.name.toLowerCase().includes(needle) ||
-        String(article.nmId).includes(needle),
-    );
-  }, [id, query]);
+        String(article.nmId).includes(needle)
+      );
+    });
+  }, [catalogue, query, category, season]);
+
+  function reset() {
+    // Список пересобрался — открытая карточка могла из него выпасть.
+    setOpenedId(null);
+    setOpenFilter(null);
+  }
 
   if (!isMarketplaceId(id)) {
     return <Redirect href="/marketplaces" />;
@@ -353,27 +467,69 @@ export default function MarketplaceArticleScreen() {
   const opened = found.find((article) => article.nmId === openedId) ?? null;
 
   return (
-    <MarketplaceShell id={id} active="article">
+    <MarketplaceShell id={id} active="article" showBack={opened === null}>
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        <TextInput
-          style={[styles.search, searchFocused && styles.searchFocused]}
-          value={query}
-          onChangeText={(next) => {
-            setQuery(next);
-            // Список пересобрался — открытая карточка могла из него выпасть.
-            setOpenedId(null);
-          }}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-          placeholder={t('articleSearch')}
-          placeholderTextColor={Palette.dim}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
+        {/* В открытой карточке поиск и фильтры не нужны: они относятся
+            к списку, а из карточки возвращаются кнопкой «К списку». */}
+        {opened === null ? (
+          <>
+            <TextInput
+              style={[styles.search, searchFocused && styles.searchFocused]}
+              value={query}
+              onChangeText={(next) => {
+                setQuery(next);
+                reset();
+              }}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder={t('articleSearch')}
+              placeholderTextColor={Palette.dim}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+
+            <View style={styles.filters}>
+              <FilterButton
+                label={t('categoryLabel')}
+                value={category}
+                open={openFilter === 'category'}
+                onToggle={() => setOpenFilter(openFilter === 'category' ? null : 'category')}
+              />
+              <FilterButton
+                label={t('seasonLabel')}
+                value={season}
+                open={openFilter === 'season'}
+                onToggle={() => setOpenFilter(openFilter === 'season' ? null : 'season')}
+              />
+            </View>
+
+            {openFilter === 'category' ? (
+              <FilterOptions
+                options={categories}
+                value={category}
+                onPick={(next) => {
+                  setCategory(next);
+                  reset();
+                }}
+              />
+            ) : null}
+
+            {openFilter === 'season' ? (
+              <FilterOptions
+                options={seasons}
+                value={season}
+                onPick={(next) => {
+                  setSeason(next);
+                  reset();
+                }}
+              />
+            ) : null}
+          </>
+        ) : null}
 
         {found.length === 0 ? <Text style={styles.empty}>{t('articleNothing')}</Text> : null}
 
@@ -822,6 +978,72 @@ const styles = StyleSheet.create({
     boxShadow: '0 0 0 3px rgba(16, 19, 23, 0.10)',
   },
 
+  filters: {
+    flexDirection: 'row',
+    gap: 9,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    backgroundColor: Palette.paper,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: Radius.control,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  filterButtonOpen: {
+    borderColor: Palette.ink,
+  },
+  filterTexts: {
+    flex: 1,
+    minWidth: 0,
+  },
+  filterCaption: {
+    fontFamily: Fonts.mono,
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: Palette.dim,
+  },
+  filterValue: {
+    fontSize: 13.5,
+    color: Palette.ink,
+    marginTop: 1,
+  },
+  filterChevron: {
+    fontSize: 12,
+    color: Palette.muted,
+  },
+  options: {
+    backgroundColor: Palette.paper,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: Radius.card,
+    paddingVertical: 4,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  optionText: {
+    fontSize: 13.5,
+    color: Palette.ink,
+  },
+  optionTextActive: {
+    fontWeight: '600',
+  },
+  optionCheck: {
+    fontSize: 13,
+    color: Palette.muted,
+  },
   empty: {
     fontSize: 13.5,
     color: Palette.muted,
