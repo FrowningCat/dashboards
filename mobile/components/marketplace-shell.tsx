@@ -36,6 +36,11 @@ type Props = {
    * в разные места, читаются как одна и та же.
    */
   showBack?: boolean;
+  /**
+   * Куда ведёт возврат — словом, а не одной стрелкой. Экраны, открытые из
+   * «Ещё», лежат глубже вкладок, и «Назад» на них не говорит, куда именно.
+   */
+  backLabel?: TranslationKey;
 };
 
 /**
@@ -46,7 +51,13 @@ type Props = {
  * ними накапливало бы в стеке десяток экранов, и «назад» пришлось бы
  * нажимать столько же раз.
  */
-export function MarketplaceShell({ id, active, children, showBack = true }: Props) {
+export function MarketplaceShell({
+  id,
+  active,
+  children,
+  showBack = true,
+  backLabel = 'back',
+}: Props) {
   const { t } = useTranslation();
   const accent = Brand[id].accent;
 
@@ -63,7 +74,7 @@ export function MarketplaceShell({ id, active, children, showBack = true }: Prop
             hitSlop={8}
             style={({ pressed }) => [styles.back, pressed && styles.backPressed]}>
             <Text style={styles.backChevron}>‹</Text>
-            <Text style={styles.backText}>{t('back')}</Text>
+            <Text style={styles.backText}>{t(backLabel)}</Text>
           </Pressable>
         ) : null}
 

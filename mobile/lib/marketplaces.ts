@@ -18,7 +18,19 @@ export function isMarketplaceId(value: string | undefined): value is Marketplace
   return value !== undefined && (MARKETPLACE_IDS as readonly string[]).includes(value);
 }
 
-export type MarketplaceTab = 'article' | 'history' | 'ads' | 'more';
+/**
+ * Экраны маркетплейса. Первые четыре — вкладки нижней панели, остальные
+ * открываются из «Ещё» и панель не занимают: мест в ней всего четыре,
+ * и все заняты.
+ */
+export type MarketplaceTab =
+  | 'article'
+  | 'history'
+  | 'ads'
+  | 'more'
+  | 'supplies'
+  | 'stocks'
+  | 'stocks-fbs';
 
 /**
  * Адреса экранов маркетплейса. Все переходы идут отсюда, чтобы приведение

@@ -40,7 +40,13 @@ export type ApiErrorCode =
   | 'notConfigured'
   | 'unreachable'
   | 'invalidCredentials'
-  | 'serverError';
+  | 'serverError'
+  /** Отчёт есть в списке, но выгрузки под него ещё нет. */
+  | 'notImplemented'
+  /** Выгрузка есть, но ни разу не отрабатывала — таблица пуста. */
+  | 'noData'
+  /** Файл получен, но сохранить его на этом устройстве нечем. */
+  | 'cannotSave';
 
 /**
  * Несёт код, а не готовую фразу: текст ошибки собирается на экране, где

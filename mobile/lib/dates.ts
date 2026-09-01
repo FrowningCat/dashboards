@@ -29,3 +29,18 @@ export function sameDay(a: Date, b: Date): boolean {
     a.getDate() === b.getDate()
   );
 }
+
+/**
+ * Последняя полная неделя, понедельник — воскресенье.
+ *
+ * Нужна финансовому отчёту: Wildberries закрывает его раз в неделю, по
+ * понедельникам за прошедшую, поэтому выбирать интервал незачем — он один.
+ * Границы сдвигаются сами каждый понедельник.
+ */
+export function previousWeek(today: Date = new Date()): { from: Date; to: Date } {
+  const base = startOfDay(today);
+  // getDay() считает от воскресенья, а неделя у нас с понедельника.
+  const monday = shiftDays(base, -((base.getDay() + 6) % 7));
+
+  return { from: shiftDays(monday, -7), to: shiftDays(monday, -1) };
+}

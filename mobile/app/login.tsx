@@ -54,6 +54,11 @@ export default function LoginScreen() {
         return t('errorUnreachable', { url: API_BASE_URL ?? '' });
       case 'serverError':
         return t('errorServer', { status: cause.detail ?? '' });
+      default:
+        // Остальные коды относятся к выгрузке отчётов и при входе возникнуть
+        // не могут. Но перечислять их здесь по одному значило бы уверять,
+        // что этого не случится, — надёжнее общая фраза.
+        return t('errorUnknown');
     }
   }
 
