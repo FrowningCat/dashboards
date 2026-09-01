@@ -32,6 +32,7 @@ const ru = {
   errorUnreachable: 'Сервер недоступен: {url}',
   errorServer: 'Сервер ответил ошибкой ({status})',
   errorNotConfigured: 'Приложение собрано без адреса сервера — обратитесь к администратору',
+  errorTooManyAttempts: 'Слишком много попыток. Попробуйте через {minutes} мин',
   errorUnknown: 'Не удалось войти',
 
   back: 'Назад',
@@ -174,6 +175,7 @@ const zh: Dictionary = {
   errorUnreachable: '无法连接服务器：{url}',
   errorServer: '服务器返回错误（{status}）',
   errorNotConfigured: '应用打包时未配置服务器地址，请联系管理员',
+  errorTooManyAttempts: '尝试次数过多，请在 {minutes} 分钟后重试',
   errorUnknown: '登录失败',
 
   back: '返回',

@@ -20,6 +20,7 @@ import { Palette, Radius } from '@/constants/design';
 import { Fonts } from '@/constants/theme';
 import { API_BASE_URL, ApiError, signIn } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n';
+import { useSession } from '@/lib/session';
 
 /** Кому писать за доступом. Пока учётки заводит один человек — адрес здесь. */
 const ADMIN_EMAIL = 'vsavinkov60@gmail.com';
@@ -28,6 +29,7 @@ type Field = 'identifier' | 'password';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
+  const { remember } = useSession();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -54,6 +56,12 @@ export default function LoginScreen() {
         return t('errorUnreachable', { url: API_BASE_URL ?? '' });
       case 'serverError':
         return t('errorServer', { status: cause.detail ?? '' });
+      case 'tooManyAttempts':
+        // Срок приходит в Retry-After секундами. Округляем вверх до минут:
+        // «через 15 мин» человек понимает, «через 899 секунд» — нет.
+        return t('errorTooManyAttempts', {
+          minutes: Math.max(1, Math.ceil(Number(cause.detail ?? 900) / 60)),
+        });
       default:
         // Остальные коды относятся к выгрузке отчётов и при входе возникнуть
         // не могут. Но перечислять их здесь по одному значило бы уверять,
@@ -71,7 +79,7 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      await signIn(identifier.trim(), password);
+      remember(await signIn(identifier.trim(), password));
     } catch (cause) {
       setError(describe(cause));
       setSubmitting(false);

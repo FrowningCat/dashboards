@@ -46,7 +46,9 @@ export type ApiErrorCode =
   /** Выгрузка есть, но ни разу не отрабатывала — таблица пуста. */
   | 'noData'
   /** Файл получен, но сохранить его на этом устройстве нечем. */
-  | 'cannotSave';
+  | 'cannotSave'
+  /** Слишком много неудачных попыток входа — сервер просит подождать. */
+  | 'tooManyAttempts';
 
 /**
  * Несёт код, а не готовую фразу: текст ошибки собирается на экране, где
@@ -61,7 +63,17 @@ export class ApiError extends Error {
   }
 }
 
-export async function signIn(identifier: string, password: string): Promise<User> {
+export type Session = {
+  user: User;
+  /**
+   * Пропуск для последующих запросов. Приходит один раз — сервер хранит
+   * только его хэш и повторно выдать не может.
+   */
+  token: string;
+  expiresAt: string;
+};
+
+export async function signIn(identifier: string, password: string): Promise<Session> {
   if (API_BASE_URL === null) {
     throw new ApiError('notConfigured');
   }
@@ -88,9 +100,36 @@ export async function signIn(identifier: string, password: string): Promise<User
     throw new ApiError('invalidCredentials');
   }
 
+  // Сколько ждать, сервер сообщает в Retry-After. Показать это человеку
+  // куда полезнее, чем «попробуйте позже» без срока.
+  if (response.status === 429) {
+    throw new ApiError('tooManyAttempts', response.headers.get('Retry-After') ?? undefined);
+  }
+
   if (!response.ok) {
     throw new ApiError('serverError', String(response.status));
   }
 
-  return (await response.json()) as User;
+  return (await response.json()) as Session;
+}
+
+/**
+ * Закрывает сессию на сервере. Ошибку глотаем намеренно: на клиенте токен
+ * в любом случае забывается, и оставлять человека внутри приложения из-за
+ * недоступного сервера было бы хуже, чем осиротевшая строка в базе — она
+ * протухнет сама.
+ */
+export async function signOut(token: string): Promise<void> {
+  if (API_BASE_URL === null) {
+    return;
+  }
+
+  try {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    // Сеть недоступна — сессия истечёт по сроку.
+  }
 }
