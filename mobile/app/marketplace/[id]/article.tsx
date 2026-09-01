@@ -5,7 +5,9 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { MarketplaceShell } from '@/components/marketplace-shell';
 import { Brand, Palette, Radius } from '@/constants/design';
 import { Fonts } from '@/constants/theme';
-import { useTranslation, type Language, type TranslationKey } from '@/lib/i18n';
+import { ARTICLE_IDENTITIES } from '@/lib/articles';
+import { decimal, grouped, money } from '@/lib/format';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { isMarketplaceId, type MarketplaceId } from '@/lib/marketplaces';
 
 type SizeStock = {
@@ -166,9 +168,7 @@ const SHOES = [
 const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
   wb: [
     {
-      nmId: 226727766,
-      vendorCode: 'ШМ-1043',
-      name: 'Ботинки зимние, нубук',
+      ...ARTICLE_IDENTITIES.boots,
       category: 'Ботинки',
       season: 'Зима',
       rating: 4.7,
@@ -212,9 +212,7 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       stockAgeHours: 2,
     },
     {
-      nmId: 198340115,
-      vendorCode: 'ШМ-0871',
-      name: 'Кроссовки летние, сетка',
+      ...ARTICLE_IDENTITIES.sneakers,
       category: 'Кроссовки',
       season: 'Лето',
       rating: 4.9,
@@ -234,9 +232,7 @@ const ARTICLES: Record<MarketplaceId, readonly Article[]> = {
       stockAgeHours: 2,
     },
     {
-      nmId: 241009338,
-      vendorCode: 'ШМ-1180',
-      name: 'Полуботинки кожаные',
+      ...ARTICLE_IDENTITIES.lowShoes,
       category: 'Полуботинки',
       season: 'Демисезон',
       rating: 4.2,
@@ -277,23 +273,6 @@ function openClaims(article: Article): number {
   return article.claims.filter((claim) => !claim.resolved).length;
 }
 
-/**
- * Разряды через неразрывный пробел, как в макете: 50 575, а не 50575.
- * Пробел неразрывный, чтобы число не переносилось по половинкам.
- */
-function grouped(value: number): string {
-  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
-
-function money(value: number): string {
-  return `${grouped(value)} ₽`;
-}
-
-/** В русском дробный разделитель — запятая, в китайском точка. */
-function formatRating(rating: number, language: Language): string {
-  const text = rating.toFixed(1);
-  return language === 'ru' ? text.replace('.', ',') : text;
-}
 
 type FilterKey = 'category' | 'season';
 
@@ -890,7 +869,7 @@ function ArticleDetail({
             </Text>
             <View style={styles.rating}>
               <Text style={[styles.star, { color: accent }]}>★</Text>
-              <Text style={styles.ratingValue}>{formatRating(article.rating, language)}</Text>
+              <Text style={styles.ratingValue}>{decimal(article.rating, 1, language)}</Text>
               <Text style={styles.ratingReviews}>
                 {t('reviews', { count: grouped(article.reviews) })}
               </Text>

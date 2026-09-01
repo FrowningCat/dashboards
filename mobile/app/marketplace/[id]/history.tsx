@@ -2,9 +2,12 @@ import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { Calendar } from '@/components/calendar';
 import { MarketplaceShell } from '@/components/marketplace-shell';
 import { Brand, Palette, Radius } from '@/constants/design';
 import { Fonts } from '@/constants/theme';
+import { formatDate, shiftDays, startOfDay } from '@/lib/dates';
+import { grouped } from '@/lib/format';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { isMarketplaceId } from '@/lib/marketplaces';
 
@@ -98,32 +101,6 @@ function series(seed: number, points: number, base: number, swing: number): numb
   }
 
   return out;
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function startOfDay(date: Date): Date {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function shiftDays(date: Date, days: number): Date {
-  return new Date(date.getTime() + days * DAY_MS);
-}
-
-function formatDate(date: Date): string {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  return `${day}.${month}`;
-}
-
-function sameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
 }
 
 type Snapshot = {
@@ -225,10 +202,6 @@ function snapshot(period: Period): Snapshot {
 const CHART_HEIGHT = 56;
 const BAR_MIN_HEIGHT = 3;
 
-function grouped(value: number): string {
-  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
-
 /**
  * Значение за предыдущий период. Считается из текущего и дельты, а не хранится
  * рядом: так «было» и процент не разъедутся, если поправить одно из них.
@@ -244,91 +217,6 @@ function formatDelta(metric: Metric): string {
   const sign = metric.delta > 0 ? '+' : metric.delta < 0 ? '−' : '';
   const size = Math.abs(metric.delta);
   return metric.deltaKind === 'percent' ? `${sign}${size} %` : `${sign}${size}`;
-}
-
-function Calendar({ value, onPick }: { value: Date; onPick: (date: Date) => void }) {
-  const { t } = useTranslation();
-  const [view, setView] = useState(() => new Date(value.getFullYear(), value.getMonth(), 1));
-
-  const months = t('monthNames').split(',');
-  const weekdays = t('weekdayNames').split(',');
-  const today = startOfDay(new Date());
-
-  const daysInMonth = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
-  // Неделя начинается с понедельника, а getDay() считает от воскресенья.
-  const offset = (new Date(view.getFullYear(), view.getMonth(), 1).getDay() + 6) % 7;
-
-  const cells: (number | null)[] = [
-    ...Array<null>(offset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
-  ];
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
-  }
-
-  const rows: (number | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    rows.push(cells.slice(i, i + 7));
-  }
-
-  const step = (delta: number) =>
-    setView(new Date(view.getFullYear(), view.getMonth() + delta, 1));
-
-  return (
-    <View style={styles.calendar}>
-      <View style={styles.calendarHead}>
-        <Pressable onPress={() => step(-1)} hitSlop={8} style={styles.calendarArrow}>
-          <Text style={styles.calendarArrowText}>‹</Text>
-        </Pressable>
-        <Text style={styles.calendarMonth}>
-          {months[view.getMonth()]} {view.getFullYear()}
-        </Text>
-        <Pressable onPress={() => step(1)} hitSlop={8} style={styles.calendarArrow}>
-          <Text style={styles.calendarArrowText}>›</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.calendarRow}>
-        {weekdays.map((name) => (
-          <Text key={name} style={styles.calendarWeekday}>
-            {name}
-          </Text>
-        ))}
-      </View>
-
-      {rows.map((row, rowIndex) => (
-        <View key={rowIndex} style={styles.calendarRow}>
-          {row.map((day, dayIndex) => {
-            if (day === null) {
-              return <View key={dayIndex} style={styles.calendarCell} />;
-            }
-
-            const date = new Date(view.getFullYear(), view.getMonth(), day);
-            // Будущее выбирать нечем: данных за него ещё нет.
-            const future = date.getTime() > today.getTime();
-            const picked = sameDay(date, value);
-
-            return (
-              <Pressable
-                key={dayIndex}
-                disabled={future}
-                onPress={() => onPick(date)}
-                style={[styles.calendarCell, picked && styles.calendarCellPicked]}>
-                <Text
-                  style={[
-                    styles.calendarDay,
-                    future && styles.calendarDayFuture,
-                    picked && styles.calendarDayPicked,
-                  ]}>
-                  {day}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ))}
-    </View>
-  );
 }
 
 export default function MarketplaceHistoryScreen() {
@@ -575,64 +463,6 @@ const styles = StyleSheet.create({
     color: Palette.muted,
   },
 
-  calendar: {
-    backgroundColor: Palette.paper,
-    borderWidth: 1,
-    borderColor: Palette.line,
-    borderRadius: Radius.card,
-    padding: 12,
-  },
-  calendarHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  calendarArrow: {
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-  },
-  calendarArrowText: {
-    fontSize: 17,
-    color: Palette.muted,
-  },
-  calendarMonth: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: Palette.ink,
-  },
-  calendarRow: {
-    flexDirection: 'row',
-  },
-  calendarWeekday: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 10,
-    color: Palette.dim,
-    paddingBottom: 4,
-  },
-  calendarCell: {
-    flex: 1,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-  },
-  calendarCellPicked: {
-    backgroundColor: Palette.ink,
-  },
-  calendarDay: {
-    fontFamily: Fonts.mono,
-    fontSize: 12.5,
-    color: Palette.ink,
-  },
-  calendarDayFuture: {
-    color: Palette.dim,
-  },
-  calendarDayPicked: {
-    color: Palette.paper,
-    fontWeight: '600',
-  },
   tiles: {
     flexDirection: 'row',
     flexWrap: 'wrap',
